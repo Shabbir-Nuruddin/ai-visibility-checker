@@ -1,21 +1,61 @@
 // Adds Gemini API keys and the access code to the Vercel project, then redeploys.
-// Keys are typed hidden, checked against Google, and sent to Vercel over stdin.
-// Nothing is printed, logged or written to disk.
+// Keys show as * while pasted, are checked against Google, and are sent to Vercel over stdin.
+// Only the first and last 4 characters are ever shown. Nothing is logged or written to disk.
 // Run from the project folder: node scripts/setup-keys.mjs
 import readline from "node:readline";
 import { spawnSync } from "node:child_process";
 
-function ask(question, { hidden = false } = {}) {
+function ask(question) {
   return new Promise((resolve) => {
     const rl = readline.createInterface({ input: process.stdin, output: process.stdout, terminal: true });
     rl.question(question, (answer) => {
       rl.close();
-      if (hidden) process.stdout.write("\n");
       resolve(answer.trim());
     });
-    if (hidden) rl._writeToOutput = () => {};
   });
 }
+
+// Masked input: shows one * per character typed or pasted, so you can see the paste landed.
+function askMasked(question) {
+  return new Promise((resolve) => {
+    const stdin = process.stdin;
+    process.stdout.write(question);
+    if (!stdin.isTTY) return ask("").then(resolve);
+    let value = "";
+    stdin.setRawMode(true);
+    stdin.resume();
+    stdin.setEncoding("utf8");
+    const done = () => {
+      stdin.setRawMode(false);
+      stdin.pause();
+      stdin.off("data", onData);
+      process.stdout.write("\n");
+      resolve(value.trim());
+    };
+    const onData = (chunk) => {
+      for (const ch of chunk) {
+        if (ch === "\r" || ch === "\n") return done();
+        if (ch === "\u0003") {
+          process.stdout.write("\n");
+          process.exit(130);
+        }
+        if (ch === "\u007f" || ch === "\b") {
+          if (value) {
+            value = value.slice(0, -1);
+            process.stdout.write("\b \b");
+          }
+          continue;
+        }
+        if (ch < " ") continue;
+        value += ch;
+        process.stdout.write("*");
+      }
+    };
+    stdin.on("data", onData);
+  });
+}
+
+const masked = (key) => `${key.slice(0, 4)}${"*".repeat(Math.max(0, key.length - 8))}${key.slice(-4)}`;
 
 async function checkKey(key) {
   try {
@@ -47,24 +87,27 @@ function setEnv(name, value) {
 console.log("\nShortlist key setup\n-------------------");
 console.log("Get a key at aistudio.google.com > Get API key > Create API key.");
 console.log("Keys from different Google projects add more free quota; keys from the same project share one limit.");
-console.log("Paste one key at a time. Nothing shows while you paste. Press Enter on an empty line when done.\n");
+console.log("The site paces each key, skips any that are resting or out for the day, and uses them evenly.");
+console.log("This replaces the saved key list, so add every key you want the site to use.");
+console.log("Paste one key at a time (right-click pastes in this window), then press Enter.");
+console.log("Each character shows as *. Press Enter on an empty line when you are done.\n");
 
 const keys = [];
-for (let n = 1; ; n++) {
-  const key = await ask(`Gemini key ${n}: `, { hidden: true });
+for (;;) {
+  const key = await askMasked(`Gemini key ${keys.length + 1}: `);
   if (!key) break;
+  console.log(`  Received ${masked(key)} (${key.length} characters).`);
   if (keys.includes(key)) {
-    console.log("  Already added, skipped.");
+    console.log("  Already added, skipped.\n");
     continue;
   }
   process.stdout.write("  Checking with Google... ");
   const check = await checkKey(key);
   if (check.ok) {
     keys.push(key);
-    console.log(`works (ending ...${key.slice(-4)}).`);
+    console.log(`works. Saved as Key ${keys.length}.\n`);
   } else {
-    console.log(`rejected: ${check.why}`);
-    n--;
+    console.log(`rejected: ${check.why}\n`);
   }
 }
 
@@ -78,18 +121,17 @@ const list = vercel(["env", "ls", "production"]).out;
 const hasCode = /\bACCESS_CODE\b/.test(list);
 let code = "";
 for (;;) {
-  code = await ask(
+  code = await askMasked(
     hasCode
       ? "New access code for the site (Enter to keep the current one): "
       : "Choose an access code (the password people type on the site): ",
-    { hidden: true },
   );
   if (!code && hasCode) break;
   if (code.length < 4) {
     console.log("  Use at least 4 characters.");
     continue;
   }
-  const again = await ask("Type it again: ", { hidden: true });
+  const again = await askMasked("Type it again: ");
   if (again === code) break;
   console.log("  They did not match. Try again.");
 }

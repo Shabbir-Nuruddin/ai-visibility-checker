@@ -122,6 +122,20 @@ details[open] summary::before{content:"\2212\00a0"}
 .tblwrap{overflow-x:auto}
 .actions{display:flex;gap:8px;margin-top:16px;flex-wrap:wrap}
 
+/* key pool */
+.keys{margin-top:28px;padding-top:16px;border-top:1px solid var(--line)}
+.keys h3{font:500 11px var(--mono);text-transform:uppercase;letter-spacing:.08em;color:var(--ink3);margin:0 0 10px;display:flex;justify-content:space-between;align-items:center;gap:12px}
+.keys h3 button{font:inherit;letter-spacing:inherit;background:none;border:0;padding:4px 0;color:var(--ink2);cursor:pointer;text-decoration:underline;text-underline-offset:3px}
+.keys h3 button:hover{color:var(--ink)}
+.keys h3 button:focus-visible{outline:2px solid var(--accent);outline-offset:2px;border-radius:2px}
+.keys ul{list-style:none;margin:0;padding:0;font-size:13px}
+.keys li{display:grid;grid-template-columns:auto 1fr auto;gap:10px;align-items:baseline;padding:7px 0;border-bottom:1px dashed var(--line)}
+.keys li b{font-weight:600}
+.keys .u{font-family:var(--mono);font-size:12px;color:var(--ink3)}
+.keys .s{font-family:var(--mono);font-size:12px;color:var(--ink2)}
+.keys .s.off{color:var(--accent)}
+.keys p{font-size:12px;color:var(--ink3);margin:10px 0 0}
+
 footer{margin-top:72px;padding-top:18px;border-top:1px solid var(--line);font-size:12px;color:var(--ink3);display:flex;justify-content:space-between;gap:16px;flex-wrap:wrap}
 
 @media (prefers-reduced-motion:reduce){*{animation:none!important;transition:none!important}}
@@ -173,6 +187,8 @@ footer{margin-top:72px;padding-top:18px;border-top:1px solid var(--line);font-si
         <button class="go" type="submit" id="go-many"><span>Run the batch</span><span class="k" id="batch-k">1 min per brand</span></button>
         <div class="err" id="err-many" role="alert" hidden></div>
       </form>
+
+      <section class="keys" id="keys" aria-live="polite" hidden></section>
     </aside>
 
     <main id="out" aria-live="polite">
@@ -231,17 +247,39 @@ function fmt(text) {
   return html;
 }
 
+// The server paces each Gemini key. This browser keeps a copy of that state so it survives restarts.
+function keyState() { try { return JSON.parse(store.get("shortlist.keys") || "{}"); } catch { return {}; } }
+
+function renderKeys(keys) {
+  const box = $("#keys");
+  if (!keys || !keys.length) { box.hidden = true; return; }
+  box.hidden = false;
+  box.innerHTML = `<h3><span>Gemini keys today</span><button type="button" id="keys-refresh">Refresh</button></h3>
+    <ul>${keys.map((k) => `<li><b>${esc(k.label)}</b><span class="u">${k.used}${k.cap ? ` of ${k.cap}` : ""} calls · up to ${k.pace}/min</span><span class="s ${k.status === "ready" || k.status.startsWith("resting") ? "" : "off"}">${esc(k.status)}</span></li>`).join("")}</ul>
+    <p>Google does not show how much free quota is left, so this counts the calls made here and marks a key out when Google says so. Each check uses about 7 calls.</p>`;
+}
+
 async function runCheck(payload) {
   const res = await fetch("/api/check", {
     method: "POST",
     headers: { "Content-Type": "application/json" },
-    body: JSON.stringify(payload),
+    body: JSON.stringify({ ...payload, keyState: keyState() }),
   });
   let data = {};
   try { data = await res.json(); } catch { throw new Error(res.status === 504 ? "The check timed out. Try fewer questions or turn web search off." : `Server error ${res.status}.`); }
+  if (data.keyState) store.set("shortlist.keys", JSON.stringify(data.keyState));
+  if (data.keys) renderKeys(data.keys);
   if (!res.ok) throw new Error(data.error || `Server error ${res.status}.`);
   return data;
 }
+
+async function refreshKeys() {
+  const code = $("#code").value || $("#code-many").value;
+  if (!code) return;
+  try { await runCheck({ code, action: "status" }); } catch {}
+}
+document.addEventListener("click", (e) => { if (e.target.closest("#keys-refresh")) refreshKeys(); });
+refreshKeys();
 
 function showError(id, msg) { const el = $(id); el.textContent = msg; el.hidden = !msg; }
 
@@ -388,7 +426,7 @@ $("#form-many").addEventListener("submit", async (e) => {
       Object.assign(batchRows[i], { status: "done", score: d.score, competitors: d.competitors, opener: d.opener });
     } catch (err) {
       Object.assign(batchRows[i], { status: "error", error: err.message });
-      if (/access code/i.test(err.message)) { showError("#err-many", err.message); break; }
+      if (/access code|today's free quota|keys work/i.test(err.message)) { showError("#err-many", err.message); break; }
     }
   }
   batchTable(batchRows.filter((r) => r.status === "done" || r.status === "error").length, batchRows.length);
