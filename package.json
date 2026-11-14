@@ -1,0 +1,11 @@
+{
+  "name": "shortlist-ai-visibility",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "description": "Checks whether Claude names a brand when buyers ask it for recommendations.",
+  "dependencies": {
+    "@anthropic-ai/sdk": "1.8.0"
+  },
+  "engines": { "node": ">=20" }
+}

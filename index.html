@@ -1,0 +1,399 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Shortlist</title>
+<meta name="description" content="Ask AI the questions your buyers ask and see whether your brand makes the shortlist.">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,400;9..144,600&family=Geist:wght@400;500;600&family=Geist+Mono:wght@400;500&display=swap" rel="stylesheet">
+<style>
+:root{
+  --paper:#F4F1EA; --card:#FBFAF6; --ink:#17160F; --ink2:#55524A; --ink3:#6B675D;
+  --line:#DDD8CC; --accent:#C2410C; --accent-soft:#F6E3D8; --ok:#17160F;
+  --serif:"Fraunces",Georgia,serif; --sans:"Geist",system-ui,sans-serif; --mono:"Geist Mono",ui-monospace,monospace;
+  --ease:cubic-bezier(.2,.7,.2,1);
+}
+*{box-sizing:border-box}
+html{-webkit-text-size-adjust:100%}
+body{margin:0;background:var(--paper);color:var(--ink);font:15px/1.55 var(--sans);font-feature-settings:"ss01"}
+a{color:inherit}
+button,input,textarea,select{font:inherit;color:inherit}
+:focus-visible{outline:2px solid var(--accent);outline-offset:2px}
+.wrap{max-width:1180px;margin:0 auto;padding:28px 24px 80px}
+header.top{display:flex;align-items:baseline;justify-content:space-between;gap:16px;padding-bottom:22px;border-bottom:1px solid var(--line)}
+.mark{font:600 20px/1 var(--serif);letter-spacing:-.01em}
+.mark span{color:var(--accent)}
+.top small{color:var(--ink3);font:12px var(--mono)}
+.layout{display:grid;grid-template-columns:minmax(300px,380px) 1fr;gap:56px;margin-top:40px;align-items:start}
+@media (max-width:900px){.layout{grid-template-columns:1fr;gap:36px}}
+
+/* form */
+aside{position:sticky;top:24px}
+@media (max-width:900px){aside{position:static}}
+h1{font:400 clamp(30px,4.2vw,44px)/1.04 var(--serif);letter-spacing:-.02em;margin:0 0 14px}
+h1 em{font-style:italic;color:var(--accent)}
+.lede{color:var(--ink2);margin:0 0 28px;max-width:34ch}
+.tabs{display:inline-flex;border:1px solid var(--line);border-radius:999px;padding:3px;margin-bottom:20px;background:var(--card)}
+.tabs button{border:0;background:none;padding:6px 14px;border-radius:999px;cursor:pointer;color:var(--ink2);font-size:13px;transition:background .18s var(--ease),color .18s var(--ease)}
+.tabs button[aria-selected=true]{background:var(--ink);color:var(--paper)}
+label{display:block;font-size:12px;font-weight:500;color:var(--ink2);margin:0 0 6px;letter-spacing:.01em}
+.field{margin-bottom:16px}
+.row2{display:grid;grid-template-columns:1fr 1fr;gap:12px}
+input[type=text],input[type=password],textarea{width:100%;border:1px solid var(--line);background:var(--card);border-radius:8px;padding:10px 12px;transition:border-color .15s var(--ease)}
+input:hover,textarea:hover{border-color:#C9C3B4}
+input:focus,textarea:focus{border-color:var(--ink);outline:none}
+textarea{resize:vertical;min-height:96px;line-height:1.45}
+.hint{font-size:12px;color:var(--ink3);margin-top:6px}
+.check{display:flex;gap:10px;align-items:flex-start;font-size:13px;color:var(--ink2);margin:4px 0 20px;cursor:pointer}
+.check input{margin-top:3px;accent-color:var(--ink)}
+.go{width:100%;border:0;border-radius:8px;background:var(--ink);color:var(--paper);padding:13px 16px;font-weight:500;cursor:pointer;display:flex;justify-content:space-between;align-items:center;transition:transform .12s var(--ease),background .18s var(--ease)}
+.go:hover{background:#2C2A21}
+.go:active{transform:scale(.985)}
+.go[disabled]{background:#6B675D;cursor:progress}
+.go .k{font:12px var(--mono);opacity:.7}
+.cost{font-size:12px;color:var(--ink3);margin-top:10px}
+.err{background:var(--accent-soft);color:#7C2D12;border-radius:8px;padding:10px 12px;font-size:13px;margin-top:14px}
+[hidden]{display:none!important}
+
+/* report */
+main{min-width:0}
+.empty{border-top:1px solid var(--ink);padding-top:22px}
+.empty h2{font:400 22px/1.2 var(--serif);margin:0 0 18px}
+.steps{list-style:none;padding:0;margin:0;counter-reset:s}
+.steps li{counter-increment:s;display:grid;grid-template-columns:40px 1fr;padding:14px 0;border-bottom:1px solid var(--line);color:var(--ink2)}
+.steps li::before{content:counter(s,decimal-leading-zero);font:12px var(--mono);color:var(--ink3);padding-top:3px}
+.steps b{color:var(--ink);font-weight:500}
+
+.status{font:13px var(--mono);color:var(--ink2);border-top:1px solid var(--ink);padding-top:18px}
+.status .bar{height:2px;background:var(--line);margin-top:14px;overflow:hidden;border-radius:2px}
+.status .bar i{display:block;height:100%;width:30%;background:var(--ink);animation:slide 1.4s var(--ease) infinite}
+@keyframes slide{from{transform:translateX(-100%)}to{transform:translateX(340%)}}
+
+.verdict{border-top:1px solid var(--ink);padding-top:22px;display:grid;grid-template-columns:auto 1fr;gap:12px 36px;align-items:end}
+@media (max-width:560px){.verdict{grid-template-columns:1fr}}
+.score{font:400 clamp(72px,11vw,128px)/.85 var(--serif);letter-spacing:-.04em}
+.score sub{font-size:.36em;vertical-align:baseline;color:var(--ink3);letter-spacing:0;margin-left:4px;bottom:0}
+.score.zero{color:var(--accent)}
+.verdict p{margin:0;font:400 20px/1.35 var(--serif);max-width:30ch}
+.meta{grid-column:1/-1;font:12px var(--mono);color:var(--ink3);display:flex;flex-wrap:wrap;gap:4px 18px;margin-top:6px}
+
+.sect{margin-top:44px}
+.sect h3{font:500 12px var(--mono);text-transform:uppercase;letter-spacing:.08em;color:var(--ink3);margin:0 0 12px}
+.rivals{display:flex;flex-wrap:wrap;gap:8px}
+.rivals span{border:1px solid var(--line);background:var(--card);border-radius:999px;padding:4px 12px;font-size:13px}
+.rivals span b{font:500 12px var(--mono);margin-left:6px;color:var(--ink3)}
+
+.opener{background:var(--card);border:1px solid var(--line);border-left:3px solid var(--accent);border-radius:8px;padding:16px 18px;display:flex;gap:16px;align-items:flex-start;justify-content:space-between}
+.opener p{margin:0;max-width:62ch}
+.btn{border:1px solid var(--line);background:var(--paper);border-radius:6px;padding:6px 12px;font-size:13px;cursor:pointer;white-space:nowrap;transition:border-color .15s var(--ease),background .15s var(--ease)}
+.btn:hover{border-color:var(--ink)}
+.btn:active{background:var(--line)}
+
+.q{border-top:1px solid var(--line);padding:18px 0}
+.q:last-child{border-bottom:1px solid var(--line)}
+.qhead{display:grid;grid-template-columns:1fr auto;gap:16px;align-items:baseline}
+.qtext{font:400 18px/1.35 var(--serif)}
+.tag{font:500 12px var(--mono);padding:3px 8px;border-radius:4px;white-space:nowrap}
+.tag.hit{background:var(--ink);color:var(--paper)}
+.tag.miss{background:var(--accent-soft);color:#9A3412}
+.tag.na{background:var(--line);color:var(--ink2)}
+.named{margin:10px 0 0;padding:0;list-style:none;display:flex;flex-wrap:wrap;gap:6px 14px;font-size:13px;color:var(--ink2)}
+.named li{display:flex;gap:6px;align-items:baseline}
+.named li i{font:normal 11px var(--mono);color:var(--ink3)}
+.named li.me{color:var(--ink);font-weight:600}
+details{margin-top:10px}
+summary{cursor:pointer;font-size:13px;color:var(--ink2);width:max-content;list-style:none}
+summary::-webkit-details-marker{display:none}
+summary::before{content:"+\00a0";font-family:var(--mono)}
+details[open] summary::before{content:"\2212\00a0"}
+.ans{margin-top:10px;padding:14px 16px;background:var(--card);border-radius:8px;font-size:14px;color:var(--ink2);overflow-wrap:anywhere}
+.ans ol,.ans ul{padding-left:20px}
+.src{margin-top:10px;font-size:12px;color:var(--ink3)}
+.src a{color:var(--ink3);text-underline-offset:2px}
+
+/* batch table */
+.tbl{width:100%;border-collapse:collapse;font-size:14px}
+.tbl th{font:500 11px var(--mono);text-transform:uppercase;letter-spacing:.06em;color:var(--ink3);text-align:left;padding:8px 10px 8px 0;border-bottom:1px solid var(--ink)}
+.tbl td{padding:12px 10px 12px 0;border-bottom:1px solid var(--line);vertical-align:top}
+.tbl td.n{font-family:var(--mono);white-space:nowrap}
+.tbl .op{color:var(--ink2);font-size:13px;max-width:46ch}
+.tblwrap{overflow-x:auto}
+.actions{display:flex;gap:8px;margin-top:16px;flex-wrap:wrap}
+
+footer{margin-top:72px;padding-top:18px;border-top:1px solid var(--line);font-size:12px;color:var(--ink3);display:flex;justify-content:space-between;gap:16px;flex-wrap:wrap}
+
+@media (prefers-reduced-motion:reduce){*{animation:none!important;transition:none!important}}
+@media (max-width:480px){.wrap{padding:20px 16px 60px}.row2{grid-template-columns:1fr}.opener{flex-direction:column}}
+</style>
+</head>
+<body>
+<div class="wrap">
+  <header class="top">
+    <div class="mark">Shortlist<span>.</span></div>
+    <small>AI search visibility check</small>
+  </header>
+
+  <div class="layout">
+    <aside>
+      <h1>When buyers ask AI, does your name <em>come up?</em></h1>
+      <p class="lede">Ask AI the questions your buyers ask. See who it recommends, and whether you are on the list.</p>
+
+      <div class="tabs" role="tablist" aria-label="Mode">
+        <button role="tab" id="tab-one" aria-selected="true" aria-controls="form-one">One brand</button>
+        <button role="tab" id="tab-many" aria-selected="false" aria-controls="form-many">Batch</button>
+      </div>
+
+      <form id="form-one" novalidate>
+        <div class="row2">
+          <div class="field"><label for="brand">Brand</label><input id="brand" type="text" required autocomplete="off" placeholder="Acme Dental"></div>
+          <div class="field"><label for="domain">Website</label><input id="domain" type="text" autocomplete="off" placeholder="acmedental.com"></div>
+        </div>
+        <div class="field"><label for="category">What they sell</label><input id="category" type="text" required autocomplete="off" placeholder="cosmetic dentistry and aligners"></div>
+        <div class="field"><label for="market">Market</label><input id="market" type="text" autocomplete="off" placeholder="Gurugram, India"></div>
+        <div class="field">
+          <label for="questions">Buyer questions <span style="color:var(--ink3);font-weight:400">(optional, one per line)</span></label>
+          <textarea id="questions" placeholder="Leave empty and the AI writes 5 for you"></textarea>
+        </div>
+        <label class="check"><input id="web" type="checkbox" checked> Let the AI search the web, like AI search does</label>
+        <div class="field"><label for="code">Access code</label><input id="code" type="password" autocomplete="off"></div>
+        <button class="go" type="submit" id="go-one"><span>Run the check</span><span class="k">about 1 min</span></button>
+        <div class="err" id="err-one" role="alert" hidden></div>
+      </form>
+
+      <form id="form-many" novalidate hidden>
+        <div class="field">
+          <label for="list">Brands <span style="color:var(--ink3);font-weight:400">(up to 25)</span></label>
+          <textarea id="list" rows="8" placeholder="Brand, website, what they sell, market"></textarea>
+          <div class="hint">One per line: brand, website, what they sell, market. Each brand gets 5 questions written for it.</div>
+        </div>
+        <label class="check"><input id="web-many" type="checkbox" checked> Let the AI search the web</label>
+        <div class="field"><label for="code-many">Access code</label><input id="code-many" type="password" autocomplete="off"></div>
+        <button class="go" type="submit" id="go-many"><span>Run the batch</span><span class="k" id="batch-k">1 min per brand</span></button>
+        <div class="err" id="err-many" role="alert" hidden></div>
+      </form>
+    </aside>
+
+    <main id="out" aria-live="polite">
+      <section class="empty">
+        <h2>How the check works</h2>
+        <ol class="steps">
+          <li><span><b>Write the questions.</b> Five things a buyer types when they need what you sell, without naming you. Or bring your own.</span></li>
+          <li><span><b>Ask the AI each one,</b> with web search on when the key allows it, the way a buyer would get an answer today.</span></li>
+          <li><span><b>Read who it named.</b> Every company in each answer, in order, and where you land if you appear at all.</span></li>
+          <li><span><b>Leave with a reason to talk.</b> A one-line opener built from the result, ready to send to the brand.</span></li>
+        </ol>
+      </section>
+    </main>
+  </div>
+
+  <footer>
+    <span>Answers come from Gemini or Claude, depending on the key set up. Results change run to run, so treat one check as a sample, not a ranking.</span>
+    <span>Built by Shabbir</span>
+  </footer>
+</div>
+
+<script>
+const $ = (s) => document.querySelector(s);
+const esc = (s) => String(s ?? "").replace(/[&<>"']/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]));
+const store = {
+  get(k) { try { return localStorage.getItem(k) || ""; } catch { return ""; } },
+  set(k, v) { try { localStorage.setItem(k, v); } catch {} },
+};
+$("#code").value = $("#code-many").value = store.get("shortlist.code");
+
+// tabs
+for (const [tab, form, other, otherForm] of [["#tab-one", "#form-one", "#tab-many", "#form-many"], ["#tab-many", "#form-many", "#tab-one", "#form-one"]]) {
+  $(tab).addEventListener("click", () => {
+    $(tab).setAttribute("aria-selected", "true"); $(other).setAttribute("aria-selected", "false");
+    $(form).hidden = false; $(otherForm).hidden = true;
+  });
+}
+
+// light formatting for answers: escape first, then bold, lists, paragraphs
+function fmt(text) {
+  const lines = esc(text).replace(/\*\*(.+?)\*\*/g, "<strong>$1</strong>").split(/\n/);
+  let html = "", list = null;
+  for (const raw of lines) {
+    const line = raw.trim();
+    const m = line.match(/^(?:[-*•]|\d+[.)])\s+(.*)/);
+    if (m) {
+      const kind = /^\d/.test(line) ? "ol" : "ul";
+      if (list !== kind) { if (list) html += `</${list}>`; html += `<${kind}>`; list = kind; }
+      html += `<li>${m[1]}</li>`;
+      continue;
+    }
+    if (list) { html += `</${list}>`; list = null; }
+    if (line) html += `<p>${line.replace(/^#+\s*/, "")}</p>`;
+  }
+  if (list) html += `</${list}>`;
+  return html;
+}
+
+async function runCheck(payload) {
+  const res = await fetch("/api/check", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(payload),
+  });
+  let data = {};
+  try { data = await res.json(); } catch { throw new Error(res.status === 504 ? "The check timed out. Try fewer questions or turn web search off." : `Server error ${res.status}.`); }
+  if (!res.ok) throw new Error(data.error || `Server error ${res.status}.`);
+  return data;
+}
+
+function showError(id, msg) { const el = $(id); el.textContent = msg; el.hidden = !msg; }
+
+function busy(btn, on, label) {
+  btn.disabled = on;
+  btn.querySelector("span").textContent = label;
+}
+
+function statusView(text) {
+  $("#out").innerHTML = `<div class="status"><span id="st">${esc(text)}</span><div class="bar"><i></i></div></div>`;
+}
+
+function report(d) {
+  const s = d.score;
+  const ai = esc(d.engine || "Claude");
+  const rivals = d.competitors.slice(0, 8);
+  const sentence = s.answered === 0
+    ? "No answers came back. See the errors below."
+    : s.mentioned === 0
+      ? `${ai} did not name ${esc(d.brand)} in any of ${s.answered} answers.`
+      : `${ai} named ${esc(d.brand)} in ${s.mentioned} of ${s.answered} answers.`;
+  const webNote = d.web ? "web search on" : d.webRequested ? "web search unavailable on this key, answered from memory" : "web search off";
+  const qs = d.results.map((r) => {
+    const tag = r.error ? `<span class="tag na">error</span>`
+      : r.refused ? `<span class="tag na">no answer</span>`
+      : r.mentioned ? `<span class="tag hit">named, #${r.position}</span>`
+      : `<span class="tag miss">not named</span>`;
+    const named = r.brands.length
+      ? `<ol class="named">${r.brands.map((b, i) => `<li class="${b.is_target ? "me" : ""}"><i>${i + 1}</i>${esc(b.name)}</li>`).join("")}</ol>`
+      : (!r.error && !r.refused ? `<p class="named">No companies named in this answer.</p>` : "");
+    const body = r.error ? `<p class="named">${esc(r.error)}</p>` : r.answer ? `<details><summary>Read ${ai}'s answer</summary><div class="ans">${fmt(r.answer)}</div>${r.sources.length ? `<div class="src">Sources: ${r.sources.map((x) => `<a href="${esc(x.url)}" target="_blank" rel="noopener">${esc(x.title)}</a>`).join(", ")}</div>` : ""}</details>` : "";
+    return `<div class="q"><div class="qhead"><div class="qtext">${esc(r.question)}</div>${tag}</div>${named}${body}</div>`;
+  }).join("");
+  $("#out").innerHTML = `
+    <section class="verdict">
+      <div class="score ${s.mentioned === 0 ? "zero" : ""}">${s.mentioned}<sub>/${s.answered}</sub></div>
+      <p>${sentence}${rivals[0] ? ` Named most often instead: ${esc(rivals[0].name)}.` : ""}</p>
+      <div class="meta"><span>${esc(d.brand)}${d.domain ? " · " + esc(d.domain) : ""}</span><span>${esc(d.market || "no market set")}</span><span>${ai} · ${webNote}</span><span>${new Date(d.checkedAt).toLocaleString()}</span></div>
+    </section>
+    ${rivals.length ? `<section class="sect"><h3>Who ${ai} named instead</h3><div class="rivals">${rivals.map((c) => `<span>${esc(c.name)}<b>${c.count}/${s.answered}</b></span>`).join("")}</div></section>` : ""}
+    ${d.opener ? `<section class="sect"><h3>Opener for ${esc(d.brand)}</h3><div class="opener"><p id="opener">${esc(d.opener)}</p><button class="btn" type="button" data-copy="#opener">Copy</button></div></section>` : ""}
+    <section class="sect"><h3>The questions</h3>${qs}</section>
+    <div class="actions"><button class="btn" type="button" id="dl-one">Download CSV</button></div>`;
+  $("#dl-one").addEventListener("click", () => download(`${slug(d.brand)}-ai-visibility.csv`, csvOne(d)));
+}
+
+document.addEventListener("click", async (e) => {
+  const b = e.target.closest("[data-copy]");
+  if (!b) return;
+  try { await navigator.clipboard.writeText($(b.dataset.copy).textContent); b.textContent = "Copied"; }
+  catch { b.textContent = "Select and copy"; }
+  setTimeout(() => (b.textContent = "Copy"), 1600);
+});
+
+const slug = (s) => String(s).toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-|-$/g, "") || "brand";
+const cell = (v) => `"${String(v ?? "").replace(/"/g, '""')}"`;
+function csvOne(d) {
+  const rows = [["brand", "question", "named", "position", "companies named"]];
+  for (const r of d.results) rows.push([d.brand, r.question, r.error ? "error" : r.mentioned ? "yes" : "no", r.position ?? "", r.brands.map((b) => b.name).join("; ")]);
+  return rows.map((r) => r.map(cell).join(",")).join("\n");
+}
+function download(name, text) {
+  const url = URL.createObjectURL(new Blob(["﻿" + text], { type: "text/csv;charset=utf-8" }));
+  const a = Object.assign(document.createElement("a"), { href: url, download: name });
+  document.body.append(a); a.click(); a.remove(); setTimeout(() => URL.revokeObjectURL(url), 1000);
+}
+
+// single brand
+$("#form-one").addEventListener("submit", async (e) => {
+  e.preventDefault();
+  showError("#err-one", "");
+  const brand = $("#brand").value.trim(), category = $("#category").value.trim(), code = $("#code").value;
+  if (!brand) { showError("#err-one", "Add the brand name."); $("#brand").focus(); return; }
+  if (!category) { showError("#err-one", "Say what the brand sells, so the questions fit."); $("#category").focus(); return; }
+  if (!code) { showError("#err-one", "Add the access code."); $("#code").focus(); return; }
+  store.set("shortlist.code", code);
+  const btn = $("#go-one");
+  busy(btn, true, "Checking");
+  statusView(`Asking AI about ${brand}. This takes about a minute.`);
+  const t0 = Date.now();
+  const tick = setInterval(() => { const st = $("#st"); if (st) st.textContent = `Asking AI about ${brand}. ${Math.round((Date.now() - t0) / 1000)}s`; }, 1000);
+  try {
+    const d = await runCheck({
+      code, brand, category,
+      domain: $("#domain").value.trim(),
+      market: $("#market").value.trim(),
+      web: $("#web").checked,
+      questions: $("#questions").value.split("\n").map((s) => s.trim()).filter(Boolean),
+    });
+    report(d);
+  } catch (err) {
+    $("#out").innerHTML = "";
+    showError("#err-one", err.message);
+  } finally {
+    clearInterval(tick);
+    busy(btn, false, "Run the check");
+  }
+});
+
+// batch
+let batchRows = [];
+function parseList(text) {
+  return text.split("\n").map((l) => l.trim()).filter(Boolean).map((l) => {
+    const [brand, domain, category, market] = l.split(",").map((s) => (s || "").trim());
+    return { brand, domain, category, market };
+  });
+}
+function batchTable(done, total) {
+  const rows = batchRows.map((r) => `<tr>
+    <td><b>${esc(r.brand)}</b><br><span style="color:var(--ink3);font-size:12px">${esc(r.domain || "")}</span></td>
+    <td class="n">${r.status === "done" ? `${r.score.mentioned}/${r.score.answered}` : r.status === "error" ? "error" : r.status === "running" ? "running" : "waiting"}</td>
+    <td>${r.status === "done" ? esc(r.competitors[0]?.name || "none") : r.status === "error" ? esc(r.error) : ""}</td>
+    <td class="op">${r.status === "done" ? esc(r.opener) : ""}</td></tr>`).join("");
+  $("#out").innerHTML = `
+    <section class="status" style="padding-bottom:0"><span>${done} of ${total} brands checked</span>${done < total ? `<div class="bar"><i></i></div>` : ""}</section>
+    <div class="tblwrap sect" style="margin-top:20px"><table class="tbl"><thead><tr><th>Brand</th><th>Named</th><th>Named most instead</th><th>Opener</th></tr></thead><tbody>${rows}</tbody></table></div>
+    ${done === total ? `<div class="actions"><button class="btn" type="button" id="dl-many">Download CSV</button></div>` : ""}`;
+  const dl = $("#dl-many");
+  if (dl) dl.addEventListener("click", () => download("ai-visibility-batch.csv", csvMany()));
+}
+function csvMany() {
+  const rows = [["brand", "website", "what they sell", "market", "named", "answered", "named most instead", "opener", "error"]];
+  for (const r of batchRows) rows.push([r.brand, r.domain, r.category, r.market, r.score?.mentioned ?? "", r.score?.answered ?? "", r.competitors?.[0]?.name ?? "", r.opener ?? "", r.error ?? ""]);
+  return rows.map((r) => r.map(cell).join(",")).join("\n");
+}
+$("#form-many").addEventListener("submit", async (e) => {
+  e.preventDefault();
+  showError("#err-many", "");
+  const list = parseList($("#list").value), code = $("#code-many").value;
+  if (!list.length) { showError("#err-many", "Add at least one brand."); $("#list").focus(); return; }
+  if (list.length > 25) { showError("#err-many", `That is ${list.length} brands. The limit is 25 per run.`); return; }
+  const bad = list.find((r) => !r.brand || !r.category);
+  if (bad) { showError("#err-many", `Each line needs a brand and what it sells. Check: ${bad.brand || "an empty brand"}`); return; }
+  if (!code) { showError("#err-many", "Add the access code."); $("#code-many").focus(); return; }
+  store.set("shortlist.code", code);
+  const btn = $("#go-many");
+  busy(btn, true, "Running");
+  batchRows = list.map((r) => ({ ...r, status: "waiting" }));
+  for (let i = 0; i < batchRows.length; i++) {
+    batchRows[i].status = "running";
+    batchTable(i, batchRows.length);
+    try {
+      const d = await runCheck({ code, ...list[i], web: $("#web-many").checked });
+      Object.assign(batchRows[i], { status: "done", score: d.score, competitors: d.competitors, opener: d.opener });
+    } catch (err) {
+      Object.assign(batchRows[i], { status: "error", error: err.message });
+      if (/access code/i.test(err.message)) { showError("#err-many", err.message); break; }
+    }
+  }
+  batchTable(batchRows.filter((r) => r.status === "done" || r.status === "error").length, batchRows.length);
+  busy(btn, false, "Run the batch");
+});
+</script>
+</body>
+</html>
