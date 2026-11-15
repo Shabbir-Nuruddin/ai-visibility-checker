@@ -13,7 +13,7 @@ const GEMINI_KEYS = [
 const USE_GEMINI = GEMINI_KEYS.length > 0;
 const ENGINE = USE_GEMINI ? "Gemini" : "Claude";
 const MODEL = USE_GEMINI
-  ? process.env.GEMINI_MODEL || "gemini-4-hydrogen"
+  ? process.env.GEMINI_MODEL || "gemini-3.5-flash-lite"
   : process.env.CLAUDE_MODEL || "claude-opus-5-5";
 const GEMINI_BASE = process.env.GEMINI_BASE_URL || "https://generativelanguage.googleapis.com";
 const MAX_QUESTIONS = 5;
@@ -162,7 +162,7 @@ async function takeKey(ctx) {
       const allOut = POOL.every((k) => slot(k.id).bad || slot(k.id).outUntil > now);
       if (allOut) throw new EngineError(429, `Every key has used today's free quota. ${resetText}`);
       if (bestAt > ctx.deadline) {
-        const why = ctx.lastLimit ? ` Google said: ${ctx.lastLimit.split("\n")[0].slice(0, 200)}` : "";
+        const why = ctx.lastLimit ? ` Google said: ${ctx.lastLimit.slice(0, 400)}` : "";
         throw new EngineError(429, `All keys are resting. Try again in ${Math.ceil((bestAt - now) / 1000)} seconds.${why}`);
       }
       await wait(bestAt - now);
@@ -212,7 +212,11 @@ async function geminiCall(body, ctx) {
       // Waiting will not help, so report it instead of resting the key.
       if (/limit:\s*0\b/.test(err.message)) throw new EngineError(429, err.message, { noQuota: true });
       onRateLimit(k, data);
-      ctx.lastLimit = err.message;
+      // Keep the part that names the limit, e.g. "generate_content_free_tier_requests, limit: 5, model: x".
+      const hit = (err.message.match(/Quota exceeded for metric:[^\n]*/g) || [])
+        .map((m) => m.replace(/^Quota exceeded for metric:\s*(generativelanguage\.googleapis\.com\/)?/, "").trim());
+      const ids = (data?.error?.details || []).flatMap((d) => (d.violations || []).map((v) => v.quotaId)).filter(Boolean);
+      ctx.lastLimit = [...new Set(hit.length ? hit : ids)].join("; ") || err.message;
       continue;
     }
     if (isKeyError(err)) {
@@ -473,6 +477,7 @@ export default async function handler(req, res) {
   mergeState(body.keyState);
   const keyInfo = () => (USE_GEMINI ? { keys: keyReport(), keyState: exportState() } : {});
   if (body.action === "status") return res.status(200).json({ engine: ENGINE, model: MODEL, ...keyInfo() });
+  if (body.action === "probe" && USE_GEMINI) return res.status(200).json(await probeKeys(body.model));
 
   const target = {
     brand: clean(body.brand, 120),
@@ -557,6 +562,32 @@ export default async function handler(req, res) {
   } catch (err) {
     return res.status(502).json({ error: describe(err), ...keyInfo() });
   }
+}
+
+// One tiny call per key, to see what Google allows each key. Never returns the keys themselves.
+async function probeKeys(model) {
+  const m = clean(model, 80) || MODEL;
+  const keys = await Promise.all(
+    POOL.map(async (k) => {
+      const r = await fetch(`${GEMINI_BASE}/v1beta/models/${m}:generateContent`, {
+        method: "POST",
+        headers: { "content-type": "application/json", "x-goog-api-key": k.key },
+        body: JSON.stringify({ contents: [{ role: "user", parts: [{ text: "Say ok." }] }] }),
+      });
+      const d = await r.json().catch(() => ({}));
+      const msg = d?.error?.message || "";
+      const hit = (msg.match(/Quota exceeded for metric:[^\n]*/g) || []).map((x) => x.replace(/^Quota exceeded for metric:\s*/, ""));
+      const ids = (d?.error?.details || []).flatMap((x) => (x.violations || []).map((v) => `${v.quotaId} ${v.quotaValue || ""}`.trim()));
+      return { label: k.label, status: r.status, limit: hit.length ? hit : ids, error: r.ok ? "" : msg.split("\n")[0].slice(0, 160) };
+    }),
+  );
+  const list = await fetch(`${GEMINI_BASE}/v1beta/models?pageSize=200`, { headers: { "x-goog-api-key": POOL[0].key } })
+    .then((r) => r.json())
+    .catch(() => ({}));
+  const models = (list.models || [])
+    .filter((x) => (x.supportedGenerationMethods || []).includes("generateContent"))
+    .map((x) => x.name.replace(/^models\//, ""));
+  return { model: m, keys, models };
 }
 
 function safeJson(s) {
