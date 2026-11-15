@@ -273,10 +273,16 @@ async function runCheck(payload) {
   return data;
 }
 
+// When the server is open, nobody needs a code, so the code fields are hidden.
+let openAccess = false;
+function setOpen(on) {
+  openAccess = on;
+  for (const id of ["#code", "#code-many"]) $(id).closest(".field").style.display = on ? "none" : "";
+}
+
 async function refreshKeys() {
   const code = $("#code").value || $("#code-many").value;
-  if (!code) return;
-  try { await runCheck({ code, action: "status" }); } catch {}
+  try { const d = await runCheck({ code, action: "status" }); setOpen(!!d.open); } catch {}
 }
 document.addEventListener("click", (e) => { if (e.target.closest("#keys-refresh")) refreshKeys(); });
 refreshKeys();
@@ -354,7 +360,7 @@ $("#form-one").addEventListener("submit", async (e) => {
   const brand = $("#brand").value.trim(), category = $("#category").value.trim(), code = $("#code").value;
   if (!brand) { showError("#err-one", "Add the brand name."); $("#brand").focus(); return; }
   if (!category) { showError("#err-one", "Say what the brand sells, so the questions fit."); $("#category").focus(); return; }
-  if (!code) { showError("#err-one", "Add the access code."); $("#code").focus(); return; }
+  if (!code && !openAccess) { showError("#err-one", "Add the access code."); $("#code").focus(); return; }
   store.set("shortlist.code", code);
   const btn = $("#go-one");
   busy(btn, true, "Checking");
@@ -413,7 +419,7 @@ $("#form-many").addEventListener("submit", async (e) => {
   if (list.length > 25) { showError("#err-many", `That is ${list.length} brands. The limit is 25 per run.`); return; }
   const bad = list.find((r) => !r.brand || !r.category);
   if (bad) { showError("#err-many", `Each line needs a brand and what it sells. Check: ${bad.brand || "an empty brand"}`); return; }
-  if (!code) { showError("#err-many", "Add the access code."); $("#code-many").focus(); return; }
+  if (!code && !openAccess) { showError("#err-many", "Add the access code."); $("#code-many").focus(); return; }
   store.set("shortlist.code", code);
   const btn = $("#go-many");
   busy(btn, true, "Running");

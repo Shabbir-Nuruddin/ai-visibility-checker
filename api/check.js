@@ -468,16 +468,18 @@ export default async function handler(req, res) {
   }
 
   const body = typeof req.body === "string" ? safeJson(req.body) : req.body || {};
+  // OPEN_ACCESS=1 lets anyone run checks without the access code (for demos). Remove it to lock the site again.
+  const open = process.env.OPEN_ACCESS === "1";
   const expected = process.env.ACCESS_CODE;
-  if (!expected) return res.status(500).json({ error: "ACCESS_CODE is not set on the server." });
-  if (body.code !== expected) return res.status(401).json({ error: "Wrong access code." });
+  if (!open && !expected) return res.status(500).json({ error: "ACCESS_CODE is not set on the server." });
+  if (!open && body.code !== expected) return res.status(401).json({ error: "Wrong access code." });
   if (!USE_GEMINI && !process.env.ANTHROPIC_API_KEY) {
     return res.status(500).json({ error: "No API key on the server. Set GEMINI_API_KEYS (free) or ANTHROPIC_API_KEY." });
   }
 
   mergeState(body.keyState);
   const keyInfo = () => (USE_GEMINI ? { keys: keyReport(), keyState: exportState() } : {});
-  if (body.action === "status") return res.status(200).json({ engine: ENGINE, model: MODEL, ...keyInfo() });
+  if (body.action === "status") return res.status(200).json({ engine: ENGINE, model: MODEL, open, ...keyInfo() });
   if (body.action === "probe" && USE_GEMINI) return res.status(200).json(await probeKeys(body.model, !!body.search));
 
   const target = {
