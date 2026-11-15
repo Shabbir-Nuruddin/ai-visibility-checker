@@ -210,7 +210,8 @@ async function geminiCall(body, ctx) {
       slot(k.id).used--; // rejected calls are not charged
       // "limit: 0" means this tier does not include the feature (e.g. Google Search on free keys).
       // Waiting will not help, so report it instead of resting the key.
-      if (/limit:\s*0\b/.test(err.message)) throw new EngineError(429, err.message, { noQuota: true });
+      // A 429 on a Google Search request on a free key is the same thing: search is not in its quota.
+      if (/limit:\s*0\b/.test(err.message) || body.tools) throw new EngineError(429, err.message, { noQuota: true });
       onRateLimit(k, data);
       // Keep the part that names the limit, e.g. "generate_content_free_tier_requests, limit: 5, model: x".
       const hit = (err.message.match(/Quota exceeded for metric:[^\n]*/g) || [])
@@ -477,7 +478,7 @@ export default async function handler(req, res) {
   mergeState(body.keyState);
   const keyInfo = () => (USE_GEMINI ? { keys: keyReport(), keyState: exportState() } : {});
   if (body.action === "status") return res.status(200).json({ engine: ENGINE, model: MODEL, ...keyInfo() });
-  if (body.action === "probe" && USE_GEMINI) return res.status(200).json(await probeKeys(body.model));
+  if (body.action === "probe" && USE_GEMINI) return res.status(200).json(await probeKeys(body.model, !!body.search));
 
   const target = {
     brand: clean(body.brand, 120),
@@ -565,14 +566,17 @@ export default async function handler(req, res) {
 }
 
 // One tiny call per key, to see what Google allows each key. Never returns the keys themselves.
-async function probeKeys(model) {
+async function probeKeys(model, search) {
   const m = clean(model, 80) || MODEL;
   const keys = await Promise.all(
     POOL.map(async (k) => {
       const r = await fetch(`${GEMINI_BASE}/v1beta/models/${m}:generateContent`, {
         method: "POST",
         headers: { "content-type": "application/json", "x-goog-api-key": k.key },
-        body: JSON.stringify({ contents: [{ role: "user", parts: [{ text: "Say ok." }] }] }),
+        body: JSON.stringify({
+          contents: [{ role: "user", parts: [{ text: "Say ok." }] }],
+          ...(search ? { tools: [{ google_search: {} }] } : {}),
+        }),
       });
       const d = await r.json().catch(() => ({}));
       const msg = d?.error?.message || "";

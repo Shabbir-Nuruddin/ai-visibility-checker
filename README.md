@@ -26,7 +26,7 @@ node scripts/setup-keys.mjs   # adds one or more Gemini keys and the access code
 
 Or set `GEMINI_API_KEYS` (comma separated), `GEMINI_API_KEY` or `ANTHROPIC_API_KEY`, plus `ACCESS_CODE`, yourself. Several Gemini keys are used in turn, and a rate-limited or rejected key is skipped.
 
-With a Gemini key set it runs on Gemini (`GEMINI_MODEL`, default `gemini-4-hydrogen`) and uses Grounding with Google Search when the key allows it. Free-tier keys answer from the model's own knowledge, and the report says so. Without it, it runs on Claude (`CLAUDE_MODEL`, default `claude-opus-5-5`) with web search.
+With a Gemini key set it runs on Gemini (`GEMINI_MODEL`, default `gemini-3.5-flash-lite`) and uses Grounding with Google Search when the key allows it. Free-tier keys get a quota error for search, so they answer from the model's own knowledge, and the report says so. Without it, it runs on Claude (`CLAUDE_MODEL`, default `claude-opus-5-5`) with web search.
 
 ## Caveat
 
