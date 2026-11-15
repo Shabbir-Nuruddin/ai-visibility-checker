@@ -62,9 +62,10 @@ const clean = (v, max = 200) => (typeof v === "string" ? v.trim().slice(0, max) 
 const wait = (ms) => new Promise((r) => setTimeout(r, ms));
 
 class EngineError extends Error {
-  constructor(status, message) {
+  constructor(status, message, extra = {}) {
     super(message);
     this.status = status;
+    Object.assign(this, extra);
   }
 }
 
@@ -80,6 +81,7 @@ class EngineError extends Error {
    The browser keeps a copy of this state and sends it back, so it survives cold starts. */
 
 const START_RPM = Number(process.env.GEMINI_RPM) || 10;
+const STATE_VERSION = 2; // bump to drop key state saved by older builds
 const DAILY_CAP = Number(process.env.GEMINI_RPD) || 0; // 0: unknown, wait for Google to say "out"
 const POOL = GEMINI_KEYS.map((key, i) => ({
   key,
@@ -105,7 +107,7 @@ function slot(id) {
     s = { day, used: 0, rpm: START_RPM, recent: [], coolUntil: 0, outUntil: 0, bad: false };
     pool.set(id, s);
   }
-  if (s.day !== day) Object.assign(s, { day, used: 0, outUntil: 0 });
+  if (s.day !== day) Object.assign(s, { day, used: 0, outUntil: 0, rpm: START_RPM });
   return s;
 }
 
@@ -113,11 +115,11 @@ function mergeState(input) {
   if (!input || typeof input !== "object") return;
   for (const k of POOL) {
     const c = input[k.id];
-    if (!c || typeof c !== "object") continue;
+    if (!c || typeof c !== "object" || c.v !== STATE_VERSION) continue;
     const s = slot(k.id);
     const num = (v) => (Number.isFinite(Number(v)) ? Number(v) : 0);
     if (c.day === s.day) s.used = Math.max(s.used, num(c.used));
-    if (num(c.rpm) >= 1) s.rpm = Math.min(s.rpm, num(c.rpm));
+    if (c.day === s.day && num(c.rpm) >= 1) s.rpm = Math.min(s.rpm, num(c.rpm));
     s.coolUntil = Math.max(s.coolUntil, num(c.coolUntil));
     if (c.day === s.day) s.outUntil = Math.max(s.outUntil, num(c.outUntil));
   }
@@ -127,7 +129,7 @@ const exportState = () =>
   Object.fromEntries(
     POOL.map((k) => {
       const { day, used, rpm, coolUntil, outUntil } = slot(k.id);
-      return [k.id, { day, used, rpm, coolUntil, outUntil }];
+      return [k.id, { v: STATE_VERSION, day, used, rpm, coolUntil, outUntil }];
     }),
   );
 
@@ -143,7 +145,7 @@ function readyAt(k, now) {
 
 const resetText = "Free quota resets at midnight Pacific time, which is 1:30 pm in India.";
 
-async function takeKey(deadline) {
+async function takeKey(ctx) {
   for (;;) {
     const now = Date.now();
     let best = null;
@@ -159,7 +161,10 @@ async function takeKey(deadline) {
     if (bestAt > now) {
       const allOut = POOL.every((k) => slot(k.id).bad || slot(k.id).outUntil > now);
       if (allOut) throw new EngineError(429, `Every key has used today's free quota. ${resetText}`);
-      if (bestAt > deadline) throw new EngineError(429, `All keys are resting. Try again in ${Math.ceil((bestAt - now) / 1000)} seconds.`);
+      if (bestAt > ctx.deadline) {
+        const why = ctx.lastLimit ? ` Google said: ${ctx.lastLimit.split("\n")[0].slice(0, 200)}` : "";
+        throw new EngineError(429, `All keys are resting. Try again in ${Math.ceil((bestAt - now) / 1000)} seconds.${why}`);
+      }
       await wait(bestAt - now);
       continue;
     }
@@ -192,7 +197,7 @@ const isKeyError = (e) =>
 async function geminiCall(body, ctx) {
   let serverRetries = 0;
   for (;;) {
-    const k = await takeKey(ctx.deadline);
+    const k = await takeKey(ctx);
     const res = await fetch(`${GEMINI_BASE}/v1beta/models/${MODEL}:generateContent`, {
       method: "POST",
       headers: { "content-type": "application/json", "x-goog-api-key": k.key },
@@ -203,7 +208,11 @@ async function geminiCall(body, ctx) {
     const err = new EngineError(res.status, data?.error?.message || `HTTP ${res.status}`);
     if (res.status === 429) {
       slot(k.id).used--; // rejected calls are not charged
+      // "limit: 0" means this tier does not include the feature (e.g. Google Search on free keys).
+      // Waiting will not help, so report it instead of resting the key.
+      if (/limit:\s*0\b/.test(err.message)) throw new EngineError(429, err.message, { noQuota: true });
       onRateLimit(k, data);
+      ctx.lastLimit = err.message;
       continue;
     }
     if (isKeyError(err)) {
@@ -280,7 +289,7 @@ async function geminiAnswer(question, system, web, ctx) {
       data = await geminiCall({ ...base, tools: [{ google_search: {} }] }, ctx);
     } catch (err) {
       // Free-tier keys cannot use Google Search on current models. Answer from memory instead.
-      if (!(err instanceof EngineError) || err.status !== 400) throw err;
+      if (!(err instanceof EngineError) || !(err.status === 400 || err.noQuota)) throw err;
       searchBlocked = true;
       searched = false;
     }
